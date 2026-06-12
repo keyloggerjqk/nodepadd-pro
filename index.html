@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Notepad++ Lite</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+
+    <style>
+        /* --- CẤU HÌNH GIAO DIỆN --- */
+        :root {
+            --bg-color: #272822; /* Màu nền Monokai */
+            --text-color: #f8f8f2;
+            --accent-color: #a6e22e; /* Màu xanh lá đặc trưng */
+            --toolbar-height: 50px;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            background-color: var(--bg-color);
+            font-family: 'Courier New', Courier, monospace; /* Phông chữ code */
+            overflow: hidden; /* Ngăn cuộn trang web, chỉ cuộn vùng nhập liệu */
+        }
+
+        /* --- THANH CÔNG CỤ --- */
+        #toolbar {
+            height: var(--toolbar-height);
+            background-color: #1e1f1c;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+        }
+
+        .brand {
+            color: var(--accent-color);
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .toolbar-buttons {
+            display: flex;
+        }
+
+        .toolbar-buttons button {
+            margin-left: 10px;
+        }
+
+        button {
+            background-color: #444;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            outline: none;
+            -webkit-tap-highlight-color: transparent; /* Tắt highlight màu xám trên iOS */
+            transition: background-color 0.2s, color 0.2s;
+        }
+
+        button:hover {
+            background-color: #555;
+        }
+
+        button:active {
+            background-color: var(--accent-color);
+            color: #000;
+        }
+
+        /* --- VÙNG SOẠN THẢO --- */
+        #editor-container {
+            position: absolute;
+            top: var(--toolbar-height);
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            border: none;
+            resize: none;
+            font-size: 16px; /* Size 16px để iOS không tự động zoom khi nhập liệu */
+            outline: none;
+            line-height: 1.5;
+            -webkit-appearance: none;
+            border-radius: 0;
+        }
+
+        /* --- POPUP KẾT QUẢ --- */
+        #result-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 200;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        #qr-image {
+            margin: 20px 0;
+            border: 5px solid white;
+            max-width: 200px;
+        }
+
+        .link-box {
+            background: #333;
+            padding: 10px;
+            word-break: break-all;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-family: sans-serif;
+            font-size: 12px;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        .close-btn {
+            background: #f44336;
+            margin-top: 15px;
+            width: 100px;
+            border-color: #d32f2f;
+        }
+
+        .close-btn:hover {
+            background: #d32f2f;
+        }
+
+        /* Loading Spinner đơn giản */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--accent-color);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            display: none;
+            margin: 10px auto;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div id="toolbar">
+        <div class="brand">Notepad++ Lite</div>
+        <div class="toolbar-buttons">
+            <button id="copy-all-btn" onclick="copyAllContent()">📋 COPY TẤT CẢ</button>
+            <button id="save-btn" onclick="saveAndShare()">💾 LƯU & CHIA SẺ</button>
+        </div>
+    </div>
+
+    <div id="editor-container">
+        <textarea id="editor" placeholder="Nhập nội dung vào đây..."></textarea>
+    </div>
+
+    <div id="result-modal">
+        <h3>Đã lưu thành công!</h3>
+        
+        <div class="loader" id="loader"></div>
+        
+        <div id="result-content" style="display:none; width: 100%;">
+            <p style="font-size: 12px; color: #aaa;">Link rút gọn (is.gd):</p>
+            <div class="link-box" id="short-link">...</div>
+            
+            <img id="qr-image" src="" alt="QR Code">
+            
+            <br>
+            <button onclick="copyLink()">Sao chép Link</button>
+        </div>
+
+        <button class="close-btn" onclick="closeModal()">Đóng</button>
+    </div>
+
+    <script>
+        const editor = document.getElementById('editor');
+        const modal = document.getElementById('result-modal');
+        const loader = document.getElementById('loader');
+        const resultContent = document.getElementById('result-content');
+        const shortLinkDisplay = document.getElementById('short-link');
+        const qrImage = document.getElementById('qr-image');
+
+        // 1. TẢI NỘI DUNG TỪ URL KHI MỞ WEB
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const data = urlParams.get('data');
+            
+            if (data) {
+                try {
+                    // Giải nén nội dung từ URL
+                    const decompressed = LZString.decompressFromEncodedURIComponent(data);
+                    if (decompressed) {
+                        editor.value = decompressed;
+                    }
+                } catch (e) {
+                    console.error("Lỗi giải nén:", e);
+                    editor.value = "Lỗi: Không thể đọc dữ liệu từ URL.";
+                }
+            }
+        };
+
+        // Hàm Copy Tất Cả Nội Dung
+        function copyAllContent() {
+            const content = editor.value;
+            if (!content) {
+                alert("Không có nội dung để copy!");
+                return;
+            }
+            
+            if (navigator.clipboard && window.isSecureContext) {
+                // Sử dụng Clipboard API hiện đại
+                navigator.clipboard.writeText(content).then(() => {
+                    alert("Đã copy tất cả nội dung!");
+                }).catch(err => {
+                    fallbackCopyTextToClipboard(content);
+                });
+            } else {
+                // Cách truyền thống (fallback)
+                fallbackCopyTextToClipboard(content);
+            }
+        }
+        
+        function fallbackCopyTextToClipboard(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            // Tránh cuộn trang
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.position = "fixed";
+            document.body.appendChild(textArea);
+            
+            // Hỗ trợ chọn văn bản cho Safari iOS 12 (iPhone 6 Plus)
+            const isIOS = navigator.userAgent.match(/ipad|iphone/i);
+            if (isIOS) {
+                textArea.contentEditable = true;
+                textArea.readOnly = false;
+                const range = document.createRange();
+                range.selectNodeContents(textArea);
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+                textArea.setSelectionRange(0, 999999);
+            } else {
+                textArea.focus();
+                textArea.select();
+            }
+            
+            try {
+                const successful = document.execCommand('copy');
+                if(successful) {
+                    alert("Đã copy thành công!");
+                } else {
+                    alert("Không thể copy, hãy bôi đen và copy thủ công.");
+                }
+            } catch (err) {
+                alert("Không thể copy, hãy bôi đen và copy thủ công.");
+            }
+            document.body.removeChild(textArea);
+        }
+
+        // 2. HÀM GỌI API RÚT GỌN LINK MIỄN PHÍ
+        async function shortenWithFreeAPI(longUrl) {
+            try {
+                // Ưu tiên 1: spoo.me (Dùng POST để hỗ trợ URL rất dài mà không bị lỗi giới hạn độ dài của GET, đồng thời hỗ trợ CORS)
+                const response = await fetch('https://spoo.me/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json'
+                    },
+                    body: new URLSearchParams({ url: longUrl })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.short_url) {
+                        return data.short_url;
+                    }
+                }
+            } catch (e) {
+                console.log("spoo.me lỗi:", e);
+            }
+
+            // Fallback 2: Nếu spoo.me lỗi, sử dụng TinyURL thông qua proxy AllOrigins để tránh lỗi CORS
+            return new Promise((resolve, reject) => {
+                fetch(`https://api.allorigins.win/get?url=${encodeURIComponent('https://tinyurl.com/api-create.php?url=' + encodeURIComponent(longUrl))}`)
+                    .then(response => {
+                        if (response.ok) return response.json();
+                        throw new Error('Lỗi kết nối proxy');
+                    })
+                    .then(data => {
+                        if (data && data.contents && data.contents.startsWith('http')) {
+                            resolve(data.contents);
+                        } else {
+                            reject('Lỗi từ API TinyURL');
+                        }
+                    })
+                    .catch(e => reject('Tất cả các API rút gọn đều thất bại: ' + e.message));
+            });
+        }
+
+        // 3. CHỨC NĂNG LƯU VÀ TẠO LINK CHÍNH
+        async function saveAndShare() {
+            const content = editor.value.trim();
+            if (!content) {
+                alert("Bạn chưa nhập nội dung gì cả!");
+                return;
+            }
+
+            // Kiểm tra thư viện nén
+            if (typeof LZString === 'undefined') {
+                alert("Lỗi: Thư viện LZString chưa được tải. Vui lòng kiểm tra kết nối mạng!");
+                return;
+            }
+
+            // Hiển thị modal loading
+            modal.style.display = 'flex';
+            loader.style.display = 'block';
+            resultContent.style.display = 'none';
+
+            // Nén nội dung
+            let compressed;
+            try {
+                compressed = LZString.compressToEncodedURIComponent(content);
+            } catch (err) {
+                alert("Lỗi khi nén nội dung: " + err.message);
+                closeModal();
+                return;
+            }
+            
+            // Tạo link gốc (Dài)
+            const baseUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            const fullUrl = `${baseUrl}?data=${compressed}`;
+
+            // Kiểm tra độ dài URL
+            if (fullUrl.length > 5000) { 
+                alert("Nội dung quá dài! Link tạo ra vượt giới hạn an toàn.");
+                closeModal();
+                return;
+            }
+
+            // Gọi hàm rút gọn link
+            try {
+                let finalLink = fullUrl;
+                
+                try {
+                    // Thử rút gọn
+                    finalLink = await shortenWithFreeAPI(fullUrl);
+                } catch (err) {
+                    console.log("Rút gọn thất bại, dùng link gốc:", err);
+                    // Nếu lỗi thì vẫn hiển thị link gốc dài
+                }
+
+                // Hiển thị kết quả
+                shortLinkDisplay.innerText = finalLink;
+                
+                // Tạo QR Code từ link cuối cùng
+                qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(finalLink)}`;
+
+                loader.style.display = 'none';
+                resultContent.style.display = 'block';
+
+            } catch (e) {
+                alert("Có lỗi xảy ra: " + e.message);
+                closeModal();
+            }
+        }
+
+        function copyLink() {
+            const linkText = document.getElementById('short-link').innerText;
+            
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(linkText).then(() => {
+                    alert("Đã sao chép link!");
+                }).catch(err => {
+                    fallbackCopyTextToClipboard(linkText);
+                });
+            } else {
+                fallbackCopyTextToClipboard(linkText);
+            }
+        }
+
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+    </script>
+</body>
+</html>
