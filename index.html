@@ -87,22 +87,59 @@
             bottom: 0;
             left: 0;
             right: 0;
-            padding: 10px;
             box-sizing: border-box;
+            background-color: var(--bg-color);
         }
 
-        textarea {
+        #backdrop, #editor {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            border: none;
-            resize: none;
-            font-size: 16px; /* Size 16px để iOS không tự động zoom khi nhập liệu */
-            outline: none;
+            padding: 10px;
+            box-sizing: border-box;
+            font-size: 16px;
+            font-family: 'Courier New', Courier, monospace;
             line-height: 1.5;
-            -webkit-appearance: none;
+            margin: 0;
+            border: none;
             border-radius: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-appearance: none;
+            letter-spacing: normal;
+            word-spacing: normal;
+            tab-size: 4;
+        }
+
+        #editor {
+            color: var(--text-color);
+            background-color: transparent;
+            z-index: 2;
+            resize: none;
+            outline: none;
+        }
+
+        #editor::selection {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #backdrop {
+            color: transparent;
+            background-color: transparent;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .link-highlight {
+            text-decoration: underline;
+            text-decoration-color: #66d9ef;
+            text-decoration-thickness: 2px;
+            background-color: rgba(102, 217, 239, 0.15);
+            border-radius: 2px;
         }
 
         /* --- POPUP KẾT QUẢ --- */
@@ -149,19 +186,49 @@
             background: #d32f2f;
         }
 
-        /* Loading Spinner đơn giản */
+        /* Loading Spinner */
         .loader {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid var(--accent-color);
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
+            width: 50px;
+            aspect-ratio: 1;
+            color: #398EB6;
+            position: relative;
+            animation: l40 .5s infinite alternate;
             display: none;
             margin: 10px auto;
         }
-
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loader:before,
+        .loader:after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-size: 25px 25px;
+            background-position: 0 0,100% 0,100% 100%,0 100%;
+            background-repeat: no-repeat;
+        }
+        .loader:before {
+            background-image:
+                radial-gradient(farthest-side at top    left ,currentColor 96%,#0000),
+                radial-gradient(farthest-side at top    right,currentColor 96%,#0000),
+                radial-gradient(farthest-side at bottom right,currentColor 96%,#0000),
+                radial-gradient(farthest-side at bottom left ,currentColor 96%,#0000);
+            animation: l40-1 1s infinite;
+        }
+        .loader:after {
+            background-image: 
+                radial-gradient(farthest-side at top    left ,#0000 94%,currentColor 96%),
+                radial-gradient(farthest-side at top    right,#0000 94%,currentColor 96%),
+                radial-gradient(farthest-side at bottom right,#0000 94%,currentColor 96%),
+                radial-gradient(farthest-side at bottom left ,#0000 94%,currentColor 96%);
+            animation: l40-2 1s infinite;
+        }
+        @keyframes l40-1 {
+            0%,10%,90%,100% {inset:0}
+            40%,60% {inset:-10px}
+        }
+        @keyframes l40-2 {
+            0%,40%  {transform: rotate(0)}
+            60%,100%{transform: rotate(90deg)}
+        }
     </style>
 </head>
 <body>
@@ -175,7 +242,8 @@
     </div>
 
     <div id="editor-container">
-        <textarea id="editor" placeholder="Nhập nội dung vào đây..."></textarea>
+        <div id="backdrop"><div id="highlights"></div></div>
+        <textarea id="editor" placeholder="Nhập nội dung vào đây..." spellcheck="false"></textarea>
     </div>
 
     <div id="result-modal">
@@ -198,6 +266,8 @@
 
     <script>
         const editor = document.getElementById('editor');
+        const backdrop = document.getElementById('backdrop');
+        const highlights = document.getElementById('highlights');
         const modal = document.getElementById('result-modal');
         const loader = document.getElementById('loader');
         const resultContent = document.getElementById('result-content');
@@ -215,13 +285,49 @@
                     const decompressed = LZString.decompressFromEncodedURIComponent(data);
                     if (decompressed) {
                         editor.value = decompressed;
+                        updateHighlights();
                     }
                 } catch (e) {
                     console.error("Lỗi giải nén:", e);
                     editor.value = "Lỗi: Không thể đọc dữ liệu từ URL.";
                 }
             }
+            updateHighlights();
         };
+
+        function updateHighlights() {
+            let text = editor.value;
+            // Escape HTML để hiển thị an toàn
+            text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            
+            // Highlight URLs
+            const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+            text = text.replace(urlRegex, function(match) {
+                let url = match;
+                let suffix = '';
+                const puncMatch = url.match(/[.,;!?]+$/);
+                if (puncMatch) {
+                    suffix = puncMatch[0];
+                    url = url.substring(0, url.length - suffix.length);
+                }
+                return `<span class="link-highlight">${url}</span>${suffix}`;
+            });
+            
+            // Xử lý xuống dòng ở cuối text (để div hiển thị đúng chiều cao)
+            if (text.endsWith('\n')) {
+                text += ' ';
+            }
+            
+            highlights.innerHTML = text;
+        }
+
+        function handleScroll() {
+            backdrop.scrollTop = editor.scrollTop;
+            backdrop.scrollLeft = editor.scrollLeft;
+        }
+
+        editor.addEventListener('input', updateHighlights);
+        editor.addEventListener('scroll', handleScroll);
 
         // Hàm Copy Tất Cả Nội Dung
         function copyAllContent() {
@@ -407,6 +513,41 @@
         function closeModal() {
             modal.style.display = 'none';
         }
+
+        // 4. MỞ LINK KHI CLICK VÀO URL TRONG TEXTAREA
+        editor.addEventListener('click', function(e) {
+            // Chỉ xử lý khi click đơn (không bôi đen text)
+            if (editor.selectionStart !== editor.selectionEnd) return;
+            
+            const text = editor.value;
+            const cursorPos = editor.selectionStart;
+            
+            // Regex tìm các chuỗi bắt đầu bằng http://, https:// hoặc www.
+            const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+            let match;
+            
+            while ((match = urlRegex.exec(text)) !== null) {
+                const start = match.index;
+                let url = match[0];
+                
+                // Loại bỏ dấu câu ở cuối (dấu chấm, phẩy, chấm phẩy, hỏi, chấm than)
+                const puncMatch = url.match(/[.,;!?]+$/);
+                if (puncMatch) {
+                    url = url.substring(0, url.length - puncMatch[0].length);
+                }
+                
+                const end = start + url.length;
+                
+                // Kiểm tra xem vị trí con trỏ chuột có nằm trong khoảng của URL không
+                if (cursorPos >= start && cursorPos <= end) {
+                    if (/^www\./i.test(url)) {
+                        url = 'http://' + url;
+                    }
+                    window.open(url, '_blank');
+                    break;
+                }
+            }
+        });
     </script>
 </body>
 </html>
