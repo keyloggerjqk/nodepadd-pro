@@ -64,13 +64,31 @@ module.exports = async (req, res) => {
         const protocol = req.headers['x-forwarded-proto'] || 'https';
         const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
         
-        const shortUrl = `${protocol}://${host}/${id}`;
+        const originalUrl = `${protocol}://${host}/${id}`;
         
-        const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(shortUrl)}`;
+        // Gọi API của duongdz.space để rút gọn link
+        let finalShortUrl = originalUrl;
+        try {
+            // Cần dùng fetch (Node 18+ mặc định hỗ trợ)
+            const shortenRes = await fetch('https://duongdz.space/api/shorten', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ originalUrl })
+            });
+            const shortenData = await shortenRes.json();
+            if (shortenData && shortenData.success && shortenData.shortUrl) {
+                finalShortUrl = shortenData.shortUrl;
+            }
+        } catch (shortenErr) {
+            console.error('Lỗi khi gọi duongdz.space API:', shortenErr);
+            // Nếu lỗi, vẫn fallback về originalUrl
+        }
+        
+        const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(finalShortUrl)}`;
 
         res.status(200).json({
             success: true,
-            short_url: shortUrl,
+            short_url: finalShortUrl,
             qr_code_url: qrCodeUrl
         });
 
