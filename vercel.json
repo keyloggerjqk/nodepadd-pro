@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/:id([a-zA-Z0-9]{5})",
+      "destination": "/"
+    }
+  ]
+}
